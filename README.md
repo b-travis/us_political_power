@@ -22,23 +22,24 @@ The core dataset is a list of positions. Names and party affiliations are not ne
 | Phase | Positions |
 | --- | --- |
 | 1. Core | President, Vice President, US Senators, US Representatives, governors, mayors |
-| 2. Extended federal | Cabinet secretaries and other top executive branch officials |
+| 2. Extended federal | Congressional leaders, selected Cabinet secretaries, White House roles, the Supreme Court, the Federal Reserve Chair, and the Chairman of the Joint Chiefs |
 | 3. Extended state | Lieutenant governors, other statewide officials, state legislators and legislative leaders |
 
 ### Dataset columns
 
-Each row is one position in one jurisdiction, such as "Governor of Texas" or "US Senator from Wyoming". The Phase 1 data is in `data/positions.csv` (637 rows). The influence index is a first cut.
+Each row is one position in one jurisdiction, such as "Governor of Texas". Rank-and-file Senators and Representatives each share one row. The data is in `data/positions.csv` (172 rows). The influence index is a first cut.
 
 | Column | Description |
 | --- | --- |
 | `position_id` | Short unique ID for the position |
 | `position` | Title of the position |
+| `category` | Group for national positions, such as Cabinet secretary (blank for others) |
 | `level` | Federal, state, or city |
-| `branch` | Executive or legislative |
+| `branch` | Executive, legislative, judicial, or independent |
 | `state` | State the position belongs to (blank for President and Vice President) |
 | `jurisdiction` | The place the position covers |
-| `seats` | How many people hold this position in the jurisdiction (e.g. 2 for a state's US Senators) |
-| `people_represented` | Population of the jurisdiction or district |
+| `seats` | How many people hold this position in the jurisdiction (e.g. 100 for US Senators) |
+| `people_represented` | Population of the jurisdiction. National positions use the US population divided by the number of people sharing that power. |
 | `population_year` | Year of the population figure |
 | `population_source` | Dataset the population figure came from |
 | `unilateral`, `budget`, `appointments`, `agenda`, `decision_share` | Factor scores from 0 to 5 (see below) |
@@ -72,16 +73,18 @@ The factor scores come from different places:
 
 | Position | Where the scores come from |
 | --- | --- |
-| President, Vice President, Senators, Representatives | One set of scores per position in `data/inputs/influence_rubric.csv` |
+| Federal positions | One set of scores per position in `data/inputs/influence_rubric.csv`. National positions are listed in `data/inputs/national_positions.csv`. |
 | Governors | Each state's scores from the Beyle index in `data/inputs/beyle_governor_powers_2007.csv`: veto for unilateral authority, budget, appointment, and separately elected officials for decision share. Agenda is a flat 3, since Beyle doesn't measure it. |
 | Mayors | One of three sets of scores in the rubric, based on the city's form of government in `data/inputs/city_government_types.csv`: mayor-council, hybrid, or council-manager |
 
 Known limits of the first cut:
 
+- **National reach shares are simplified.** Dividing by 15 treats every Cabinet department alike, though their sizes differ widely. Sharing power also lowers an appointee's decision share, so that fact counts twice.
+- **The five factors fit some roles poorly.** They don't capture the Supreme Court's final say or the Federal Reserve's power over interest rates.
 - **Governor data is old.** The latest Beyle scores found are from 2007, so some states will have changed.
 - **Party control is left out.** Beyle's index includes it, but it depends on who holds office, not on the position. Tenure is left out too, since it doesn't map to any of the five factors.
 - **All mayor-council cities score the same.** New York and much smaller strong-mayor cities are identical for now. Charter-level scoring would separate them.
-- **Formal powers only.** The index doesn't count informal power, such as the Vice President's role as successor or a Senator's seniority. Every Senator and Representative also scores the same, so leadership roles such as Speaker aren't captured.
+- **Formal powers only.** The index doesn't count informal power, such as the Vice President's role as successor or a member of Congress's seniority.
 - **Some city types are uncertain.** Sources disagree on some cities, and Honolulu and Mesa are unverified. See the `source` and `note` columns of `city_government_types.csv`.
 
 ### Overall ranking
@@ -130,7 +133,7 @@ Built so far:
 - A chart of each position's rank range across scenarios
 - A scenario selector that re-ranks every position under different assumptions
 - Side-by-side comparison of up to five positions
-- A page explaining the method and its limits
+- A separate Methodology page explaining the method, its limits, and common questions
 
 Possible later extensions:
 
@@ -145,7 +148,6 @@ Possible later extensions:
 | Need | Source |
 | --- | --- |
 | State, city, and national population | [US Census Bureau Population Estimates](https://www.census.gov/programs-surveys/popest.html), Vintage 2025 |
-| Congressional district population | US Census Bureau American Community Survey 2024 1-year, table B01003 |
 | Governor powers | [Thad Beyle's Gubernatorial Power data](https://web.archive.org/web/2013/http://www.unc.edu/~beyle/gubnewpwr.html), Governors' Institutional Powers 2007 (archived copy). The Oklahoma total in the source reads 175, a typo for 17; totals aren't used here. |
 | City form of government | Mainly Wikipedia. City websites, charters, and Ballotpedia were used where Wikipedia was blank or unclear. Each city's source is recorded. |
 
@@ -156,8 +158,7 @@ Choices and limits in the Phase 1 data:
 - **Mayors:** the 100 largest cities by population, which is a starting cutoff and easy to change.
 - **County-wide mayors:** Honolulu and Baton Rouge use county or parish population, because their mayors govern more than the Census city area. Indianapolis, Louisville, and Nashville use their consolidated city-county population.
 - **DC and territories:** the Mayor of DC is included as a city mayor. DC's non-voting delegate and all US territories are left out for now.
-- **House districts:** figures use 2024 data and the 119th Congress boundaries, so they are a year older than the other populations. States that have redrawn their maps since then won't match exactly.
-- **Senators:** each row is one state with `seats` set to 2, and `people_represented` is the full state population.
+- **National positions:** reach is the US population divided by the number of people sharing that power, set by `reach_divisor` in `data/inputs/national_positions.csv`. The President and Vice President are elected nationally and get the whole country. Senators get 1/100, Representatives 1/435, justices 1/9, the Federal Reserve Chair 1/12, Cabinet and senior presidential roles 1/15, chamber leaders 1/2, and minority leaders and the House Majority Leader 1/4. Population by state or district is not used for Congress.
 
 ### Candidates
 
@@ -172,14 +173,15 @@ These have not been checked or downloaded yet.
 
 ## Open questions
 
-- **Balancing the two measures:** should reach and influence count equally in the final score? The 100,000 floor also needs lowering if smaller positions, such as state legislators, are added.
+- **Balancing the two measures:** should reach and influence count equally in the final score?
+- **Reach scale:** is log the right scale? It compresses population heavily, and its 100,000 floor is arbitrary and must drop if smaller positions, such as state legislators, are added. A power scale such as a cube root needs no floor. Across scales tested, most ranks barely moved, but the Vice President ranged from 4th to 66th.
+- **Spending controlled:** should the method use the budget each position controls? It may suit the mayor and governor comparison better than a flat scope multiplier: New York City's budget is far larger than Wyoming's or Vermont's. State GDP was tested and is nearly identical to population (correlation 0.99). Land area was tested and is unrelated to population (0.2), but it doesn't clearly measure power.
 - **Weights:** should all five factors count equally? Are the scope multipliers right?
 - **Comparing levels:** can one index fairly compare a federal position to a city position? A mayor may control their city more fully than a Senator controls anything, but over far fewer people and with narrower authority.
-- **Positions without constituents:** Cabinet secretaries are appointed and don't directly represent anyone. Should their reach be the US population, or the people their department affects?
-- **Shared representation:** should a Senator's reach be the whole state, or should it be split with the state's other Senator?
+- **National reach shares:** are the divisors right? Would budget or the people a department affects be a better basis than a flat 1/15 for Cabinet and senior presidential roles?
 - **Mayor cutoff:** the US has thousands of mayors. The list currently stops at the largest 100 cities. Is that the right place to stop?
 - **Territories and DC:** should US territories and non-voting delegates be added?
-- **Beyond elected office:** should the list stay with elected and political positions, or later add roles such as Supreme Court justices and the Federal Reserve Chair?
+- **More positions:** should the list add the remaining Cabinet secretaries or committee chairs?
 
 ## Running locally
 

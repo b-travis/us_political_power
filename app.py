@@ -21,6 +21,11 @@ MAYOR_TYPES = {
 POSITION_TYPES = [
     "President",
     "Vice President",
+    "Congressional leader",
+    "Cabinet secretary",
+    "White House",
+    "Supreme Court",
+    "Other federal",
     "Governor",
     "US Senator",
     "US Representative",
@@ -37,8 +42,8 @@ SCENARIO_COLUMNS = ["reach_index", "influence_index", "power_score", "power_rank
 
 # Labeled on the scatter chart when they pass the current filters.
 CHART_LABELS = [
-    "president", "vice-president", "governor-ca", "governor-ny", "governor-wy",
-    "senator-ca", "senator-wy", "mayor-ny-new-york", "mayor-tx-dallas",
+    "president", "vice-president", "speaker-of-the-house", "governor-ca", "governor-ny", "governor-wy",
+    "us-senator", "us-representative", "mayor-ny-new-york",
 ]
 
 
@@ -52,8 +57,6 @@ def display_name(row: pd.Series) -> str:
             return f"Governor of {row['jurisdiction']}"
         case "Mayor":
             return f"Mayor of {row['jurisdiction']}"
-        case "US Senator" | "US Representative":
-            return f"{row['position']}, {row['jurisdiction']}"
         case _:
             return row["position"]
 
@@ -66,7 +69,9 @@ def load_data() -> dict[str, pd.DataFrame]:
     positions = positions.merge(
         cities[["jurisdiction", "government_type"]], on="jurisdiction", how="left"
     )
-    positions["position_type"] = positions["government_type"].map(MAYOR_TYPES).fillna(positions["position"])
+    positions["position_type"] = (
+        positions["government_type"].map(MAYOR_TYPES).fillna(positions["category"]).fillna(positions["position"])
+    )
     positions["name"] = positions.apply(display_name, axis=1)
     positions["rank_range"] = (
         positions["power_rank_best"].astype(str) + "–" + positions["power_rank_worst"].astype(str)
@@ -96,7 +101,7 @@ def scatter_chart(view: pd.DataFrame) -> alt.LayerChart:
     x = alt.X(
         "people_represented:Q",
         title="People represented (log scale)",
-        scale=alt.Scale(type="log", domain=[100_000, 500_000_000]),
+        scale=alt.Scale(type="log", domain=[100_000, 3_000_000_000]),
         axis=alt.Axis(values=[100_000, 1_000_000, 10_000_000, 100_000_000], format="~s"),
     )
     y = alt.Y("influence_index:Q", title="Influence index", scale=alt.Scale(domain=[0, 100]))
@@ -165,7 +170,7 @@ def range_chart(view: pd.DataFrame) -> alt.LayerChart:
     )
 
 
-def show_rankings(view: pd.DataFrame) -> None:
+def show_rankings(view: pd.DataFrame, total: int) -> None:
     table = view[[
         "power_rank", "name", "power_score", "rank_range", "people_represented",
         "reach_index", "influence_index", "position_type", "influence_notes",
@@ -177,18 +182,18 @@ def show_rankings(view: pd.DataFrame) -> None:
         height=620,
         column_config={
             "power_rank": st.column_config.NumberColumn(
-                "Rank", help="Rank among all 637 positions, even when filters are on. 1 is the most powerful."
+                "Rank", help=f"Rank among all {total} positions, even when filters are on. 1 is the most powerful."
             ),
             "name": st.column_config.TextColumn("Position", width="medium"),
             "power_score": st.column_config.ProgressColumn(
-                "Power score", help="Combines reach and influence. See How it works.",
+                "Power score", help="Combines reach and influence. See the Methodology page.",
                 min_value=0, max_value=100, format="%.1f",
             ),
             "rank_range": st.column_config.TextColumn(
                 "Rank range", help="Best and worst rank across all scenarios."
             ),
             "people_represented": st.column_config.NumberColumn(
-                "People represented", help="Population of the position's jurisdiction.", format="localized"
+                "People represented", help="Population of the position's jurisdiction. National positions use their share of the US population.", format="localized"
             ),
             "reach_index": st.column_config.NumberColumn(
                 "Reach", help="Population on a log scale from 0 to 100.", format="%.1f"
@@ -204,7 +209,7 @@ def show_rankings(view: pd.DataFrame) -> None:
 
 def show_compare(positions: pd.DataFrame, results: pd.DataFrame, scenarios: pd.DataFrame) -> None:
     st.write("Pick positions to compare side by side. This list ignores the sidebar filters.")
-    defaults = ["Governor of Texas", "Mayor of New York, NY", "US Senator, California", "Vice President"]
+    defaults = ["Governor of Texas", "Mayor of New York, NY", "US Senator", "Speaker of the House"]
     names = st.multiselect(
         "Positions", positions["name"].tolist(), default=defaults, max_selections=5
     )
@@ -240,12 +245,13 @@ def show_compare(positions: pd.DataFrame, results: pd.DataFrame, scenarios: pd.D
         st.markdown(f"**{name}:** {notes}")
 
 
-def show_method(data: dict[str, pd.DataFrame]) -> None:
+def methodology_page() -> None:
+    data = load_data()
     positions, rubric, scenarios = data["positions"], data["rubric"], data["scenarios"]
     baseline = scenarios.iloc[0]
     example = positions.set_index("position_id").loc["governor-tx"]
 
-    st.header("How it works")
+    st.title("Methodology")
     st.write(
         "Each position gets two measures, **reach** and **influence**, which are combined "
         "into one **power score**. This is a first cut built on simplified assumptions, and "
@@ -258,7 +264,35 @@ def show_method(data: dict[str, pd.DataFrame]) -> None:
         "On a log scale, every tenfold increase in population adds the same number of points. "
         f"A population of {baseline['reach_floor']:,.0f} scores 0, and the US population scores 100."
     )
-    st.latex(r"\text{reach} = 100 \times \frac{\log_{10}(\text{people}) - \log_{10}(100{,}000)}{\log_{10}(\text{US population}) - \log_{10}(100{,}000)}")
+    st.write(
+        "Governors and mayors use the population of their state or city. National positions don't "
+        "represent a place, so they follow one rule: **the US population divided by the number of "
+        "people sharing that power.** The President and Vice President are elected nationally, so "
+        "they get the whole country."
+    )
+    st.write(
+        "This is why every Senator gets the same reach. A Wyoming Senator's vote counts exactly as "
+        "much as a California Senator's, so each gets an equal share of the country."
+    )
+    national = pd.read_csv(INPUTS_DIR / "national_positions.csv")
+    shares = (
+        national.groupby(["reach_divisor", "reach_basis"], as_index=False)["position"]
+        .agg(", ".join)
+        .sort_values("reach_divisor")
+    )
+    shares = pd.concat([
+        pd.DataFrame({
+            "reach_divisor": [1, 100, 435],
+            "reach_basis": ["Elected nationally", "One of 100 votes", "One of 435 votes"],
+            "position": ["President, Vice President", "US Senator", "US Representative"],
+        }),
+        shares,
+    ]).sort_values("reach_divisor", kind="stable")
+    st.table(
+        shares.rename(columns={
+            "reach_divisor": "US population divided by", "reach_basis": "Why", "position": "Positions",
+        }).set_index("US population divided by")
+    )
 
     st.subheader("Step 2: Influence")
     st.write("Each position is scored from 0 to 5 on five factors:")
@@ -286,7 +320,9 @@ def show_method(data: dict[str, pd.DataFrame]) -> None:
 
     st.write("**Where the factor scores come from**")
     st.markdown(
-        "- **Federal positions:** one set of scores per position, which are judgment calls.\n"
+        "- **Federal positions:** one set of scores per position, which are judgment calls. "
+        "Appointees get a low decision share because they act on the President's authority "
+        "and can usually be removed.\n"
         "- **Mayors:** one of three sets of scores, based on the city's form of government. "
         "In a mayor-council city, the mayor runs the government. In a council-manager city, "
         "an appointed manager does. Hybrid cities split that power.\n"
@@ -348,21 +384,69 @@ def show_method(data: dict[str, pd.DataFrame]) -> None:
         "scenarios, and they don't account for errors in the factor scores."
     )
 
+    st.subheader("Common questions")
+    st.write("**Why use a log scale for population?**")
+    st.write(
+        "It's a judgment call. Without one, population overwhelms everything else: on a straight "
+        "population scale, the Vice President jumps from 66th to 4th despite having few formal "
+        "powers. A log scale may go too far the other way. The President represents about 580 "
+        "times as many people as Wyoming's governor but gets only 4.6 times the reach. In tests of "
+        "straight, square root, cube root, fourth root, and log scales, many ranks moved modestly: "
+        "the Mayor of New York stayed between 38th and 46th. The Vice President moved the most."
+    )
+    st.write("**Why do all Senators score the same, whatever their state's population?**")
+    st.write(
+        "Each Senator casts one vote, and Wyoming's counts as much as California's. Population "
+        "measures who a Senator represents, not how much the Senator can do. The same logic applies "
+        "to Representatives. Only leaders are separated out, because they steer what the chamber does."
+    )
+    st.write("**Are big-city mayors really less powerful than small-state governors?**")
+    st.write(
+        "Not all of them. New York's mayor outranks 23 governors under the main method, and "
+        "outranks Wyoming's governor in every scenario. Nine mayors outrank Wyoming's governor, "
+        "and four outrank Alaska's. Budgets suggest the method may still underrate the largest "
+        "cities. New York City's budget is about $116 billion a year, against about $9 billion "
+        "for Vermont and about $5 billion for Wyoming. Governors do hold powers mayors lack, "
+        "including state lawmaking, and a state can override its cities. City and state budgets "
+        "also cover different services, so they aren't directly comparable."
+    )
+    st.write("**Why not use GDP or land area as well as population?**")
+    st.write(
+        "State GDP and population are almost the same measure on a log scale, with a correlation "
+        "of 0.99, so GDP would add little. Land area has little relationship to population "
+        "(correlation 0.2), but it doesn't obviously measure power, since it would mainly reward "
+        "Alaska. The amount of government spending a position controls may be a better addition, "
+        "and it isn't in the method yet."
+    )
+
     st.subheader("What's included")
     st.markdown(
         "- President, Vice President, US Senators, US Representatives, governors, and the "
         "mayors of the 100 largest cities (including DC).\n"
-        "- Each state's two Senators share one row, and each is credited with the full state population.\n"
+        "- Selected national positions: the top congressional leaders, six Cabinet secretaries, "
+        "three White House roles, the Supreme Court, the Federal Reserve Chair, and the Chairman "
+        "of the Joint Chiefs. The Secretary of Defense also uses the title Secretary of War.\n"
+        "- The eight Associate Justices share one row.\n"
+        "- All 100 Senators share one row, and all 435 Representatives share another, because "
+        "they score the same.\n"
         "- Honolulu and Baton Rouge use county or parish population, since their mayors govern that wider area.\n"
-        "- Not yet included: the Cabinet, lieutenant governors, state legislators, courts, "
-        "non-voting delegates, and US territories."
+        "- Not yet included: the other Cabinet secretaries, committee chairs, lieutenant "
+        "governors, state legislators, lower courts, non-voting delegates, and US territories."
     )
 
     st.subheader("Known limits")
     st.markdown(
         "- **Formal powers only.** The index leaves out informal power, including the Vice "
-        "President's place in the line of succession. Every Senator and Representative scores "
-        "the same, so roles like Speaker aren't captured.\n"
+        "President's place in the line of succession, or a member of Congress's seniority or "
+        "committee role.\n"
+        "- **National reach shares are simplified.** Dividing by 15 treats every Cabinet department "
+        "alike, though their sizes differ widely. Sharing power also lowers an appointee's decision "
+        "share, so that fact counts twice.\n"
+        "- **The five factors fit some roles poorly.** They were built for executives and "
+        "legislators, so they don't capture the Supreme Court's final say or the Federal "
+        "Reserve's power over interest rates.\n"
+        "- **Leaders are counted separately.** A congressional leader is also a Senator or "
+        "Representative, so that person fits two rows.\n"
         "- **Governor data is from 2007,** the latest found, so some states will have changed.\n"
         "- **All mayors of the same city type score the same.** The New York mayor's influence "
         "equals that of any other mayor-council city.\n"
@@ -376,103 +460,112 @@ def show_method(data: dict[str, pd.DataFrame]) -> None:
     st.subheader("Data sources")
     st.markdown(
         "- **Population:** [US Census Bureau Population Estimates](https://www.census.gov/programs-surveys/popest.html), "
-        "Vintage 2025. House districts use the American Community Survey 2024 1-year estimates "
-        "on 119th Congress boundaries.\n"
+        "Vintage 2025.\n"
         "- **Governor powers:** [Thad Beyle's Gubernatorial Power data](https://web.archive.org/web/2013/http://www.unc.edu/~beyle/gubnewpwr.html), 2007.\n"
         "- **City form of government:** mainly Wikipedia, with city websites, charters, and "
-        "Ballotpedia used where Wikipedia was blank or unclear."
+        "Ballotpedia used where Wikipedia was blank or unclear.\n"
+        "- **Common questions:** state GDP from the [US Bureau of Economic Analysis](https://apps.bea.gov/regional/zip/SAGDP.zip) "
+        "(2025), land area from the [Census Gazetteer](https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.html) "
+        "(2024), and budgets from the [NYC Comptroller](https://comptroller.nyc.gov/wp-content/uploads/documents/FY-2026-Adopted-Budget-Report.pdf) "
+        "and [NASBO's profiles of Vermont](https://nasbo.connectedcommunity.org/mainsite/resources/vermont-budget) "
+        "and [Wyoming](https://nasbo.connectedcommunity.org/mainsite/resources/wyoming-budget). "
+        "Wyoming's two-year budget of about $10 billion to $11 billion is halved here."
     )
+
+
+def rankings_page() -> None:
+    data = load_data()
+    positions, results, scenarios = data["positions"], data["results"], data["scenarios"]
+
+    st.title("US Political Power")
+    st.write(
+        "The President is probably the most powerful position in the US. But where do a Senator, "
+        f"a governor, or a big-city mayor rank? This app ranks {len(positions)} positions, not the people who hold them."
+    )
+
+    with st.container(border=True):
+        st.markdown("**How the ranking works**")
+        reach_col, influence_col, power_col = st.columns(3)
+        reach_col.markdown("**Reach (0–100)**  \nHow many people the position represents, on a log scale.")
+        influence_col.markdown(
+            "**Influence (0–100)**  \nHow much it can do: acting alone, budget, appointments, agenda, "
+            "and decision share, adjusted for level of government."
+        )
+        power_col.markdown(
+            "**Power score (0–100)**  \nThe geometric mean of the two, so a position needs both to score well."
+        )
+        st.caption(
+            "This is a first cut, and many scores are judgment calls. Rank range shows how far a "
+            "rank moves under other assumptions."
+        )
+        st.page_link(methodology, label="Read the full methodology", icon=":material/menu_book:")
+
+    with st.sidebar:
+        st.header("Scenario")
+        scenario = st.selectbox("Assumptions", scenarios["scenario"].tolist(), format_func=scenario_label)
+        st.caption(scenarios.set_index("scenario").loc[scenario, "description"])
+
+        st.header("Filters")
+        types = st.multiselect("Position type", POSITION_TYPES, placeholder="All position types")
+        states = st.multiselect(
+            "State", sorted(positions["state"].dropna().unique()), placeholder="All states"
+        )
+        search = st.text_input("Search", placeholder="e.g. Chicago")
+        st.caption(
+            f"Filters don't change ranks, which always compare all {len(positions)} positions. Filtering "
+            "by state hides national positions, including members of Congress."
+        )
+
+    view = apply_scenario(positions, results, scenario)
+    filtered = view
+    if types:
+        filtered = filtered[filtered["position_type"].isin(types)]
+    if states:
+        filtered = filtered[filtered["state"].isin(states)]
+    if search:
+        filtered = filtered[filtered["name"].str.contains(search, case=False, regex=False)]
+
+    rankings_tab, chart_tab, range_tab, compare_tab = st.tabs(
+        ["Rankings", "Reach vs. influence", "Rank ranges", "Compare"]
+    )
+
+    with rankings_tab:
+        st.caption(f"Showing {len(filtered)} of {len(view)} positions, using the {scenario_label(scenario).lower()} scenario.")
+        if filtered.empty:
+            st.info("No positions match these filters.")
+        else:
+            show_rankings(filtered, len(view))
+
+    with chart_tab:
+        st.subheader("Which positions have reach, and which have real influence?")
+        st.write(
+            "Each dot is a position. Higher means more influence, and further right means more people. "
+            "Many dots overlap because positions of the same type can share an influence score. "
+            "Hover over a dot for details."
+        )
+        if filtered.empty:
+            st.info("No positions match these filters.")
+        else:
+            st.altair_chart(scatter_chart(filtered), width="stretch")
+
+    with range_tab:
+        st.subheader("How much does each rank depend on the assumptions?")
+        st.write(
+            "The dot is the rank under the selected scenario, and the line runs from the best to the "
+            "worst rank across all scenarios. Long lines mean less certain rankings. "
+            "This chart shows the top 30 positions that match the filters."
+        )
+        if filtered.empty:
+            st.info("No positions match these filters.")
+        else:
+            st.altair_chart(range_chart(filtered.head(30)), width="stretch")
+
+    with compare_tab:
+        show_compare(view, results, scenarios)
 
 
 st.set_page_config(page_title="US Political Power", page_icon="🏛️", layout="wide")
 
-data = load_data()
-positions, results, scenarios = data["positions"], data["results"], data["scenarios"]
-
-st.title("US Political Power")
-st.write(
-    "The President is probably the most powerful position in the US. But where do a Senator, "
-    "a governor, or a big-city mayor rank? This app ranks 637 positions, not the people who hold them."
-)
-
-with st.container(border=True):
-    st.markdown("**How the ranking works**")
-    reach_col, influence_col, power_col = st.columns(3)
-    reach_col.markdown("**Reach (0–100)**  \nHow many people the position represents, on a log scale.")
-    influence_col.markdown(
-        "**Influence (0–100)**  \nHow much it can do: acting alone, budget, appointments, agenda, "
-        "and decision share, adjusted for level of government."
-    )
-    power_col.markdown(
-        "**Power score (0–100)**  \nThe geometric mean of the two, so a position needs both to score well."
-    )
-    st.caption(
-        "This is a first cut, and many scores are judgment calls. Rank range shows how far a "
-        "rank moves under other assumptions. Full details are in the How it works tab."
-    )
-
-with st.sidebar:
-    st.header("Scenario")
-    scenario = st.selectbox("Assumptions", scenarios["scenario"].tolist(), format_func=scenario_label)
-    st.caption(scenarios.set_index("scenario").loc[scenario, "description"])
-
-    st.header("Filters")
-    types = st.multiselect("Position type", POSITION_TYPES, placeholder="All position types")
-    states = st.multiselect(
-        "State", sorted(positions["state"].dropna().unique()), placeholder="All states"
-    )
-    search = st.text_input("Search", placeholder="e.g. Chicago")
-    st.caption(
-        "Filters don't change ranks, which always compare all 637 positions. Filtering by state "
-        "hides the President and Vice President."
-    )
-
-view = apply_scenario(positions, results, scenario)
-filtered = view
-if types:
-    filtered = filtered[filtered["position_type"].isin(types)]
-if states:
-    filtered = filtered[filtered["state"].isin(states)]
-if search:
-    filtered = filtered[filtered["name"].str.contains(search, case=False, regex=False)]
-
-rankings_tab, chart_tab, range_tab, compare_tab, method_tab = st.tabs(
-    ["Rankings", "Reach vs. influence", "Rank ranges", "Compare", "How it works"]
-)
-
-with rankings_tab:
-    st.caption(f"Showing {len(filtered)} of {len(view)} positions, using the {scenario_label(scenario).lower()} scenario.")
-    if filtered.empty:
-        st.info("No positions match these filters.")
-    else:
-        show_rankings(filtered)
-
-with chart_tab:
-    st.subheader("Which positions have reach, and which have real influence?")
-    st.write(
-        "Each dot is a position. Higher means more influence, and further right means more people. "
-        "Many dots overlap because positions of the same type can share an influence score. "
-        "Hover over a dot for details."
-    )
-    if filtered.empty:
-        st.info("No positions match these filters.")
-    else:
-        st.altair_chart(scatter_chart(filtered), width="stretch")
-
-with range_tab:
-    st.subheader("How much does each rank depend on the assumptions?")
-    st.write(
-        "The dot is the rank under the selected scenario, and the line runs from the best to the "
-        "worst rank across all scenarios. Long lines mean less certain rankings. "
-        "This chart shows the top 30 positions that match the filters."
-    )
-    if filtered.empty:
-        st.info("No positions match these filters.")
-    else:
-        st.altair_chart(range_chart(filtered.head(30)), width="stretch")
-
-with compare_tab:
-    show_compare(view, results, scenarios)
-
-with method_tab:
-    show_method(data)
+rankings = st.Page(rankings_page, title="Rankings", icon=":material/leaderboard:", default=True)
+methodology = st.Page(methodology_page, title="Methodology", icon=":material/menu_book:")
+st.navigation([rankings, methodology]).run()

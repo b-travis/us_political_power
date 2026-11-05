@@ -25,17 +25,18 @@ OUTPUT = ROOT / "data" / "positions.csv"
 SCENARIO_OUTPUT = ROOT / "data" / "scenario_results.csv"
 
 POPEST = "https://www2.census.gov/programs-surveys/popest/datasets/2020-2025"
-ACS = "https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/1YRData"
 SOURCES = {
     "states.csv": f"{POPEST}/state/totals/NST-EST2025-ALLDATA.csv",
     "places.csv": f"{POPEST}/cities/totals/sub-est2025.csv",
-    "acs_population.dat": f"{ACS}/acsdt1y2024-b01003.dat",
 }
 
 POPEST_SOURCE = "Census Population Estimates, Vintage 2025"
-ACS_SOURCE = "Census ACS 1-year 2024, table B01003"
 
 MAYOR_COUNT = 100
+
+# Each legislator gets an equal share of the country: one vote counts the same
+# whichever state or district it comes from.
+CHAMBER_SEATS = {"US Senator": 100, "US Representative": 435}
 
 FACTORS = ["unilateral", "budget", "appointments", "agenda", "decision_share"]
 MAX_FACTOR_SCORE = 5
@@ -94,10 +95,11 @@ def slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
-def row(position_id, position, level, branch, state, jurisdiction, seats, people, year, source):
+def row(position_id, position, level, branch, state, jurisdiction, seats, people, year, source, category=None):
     return {
         "position_id": position_id,
         "position": position,
+        "category": category,
         "level": level,
         "branch": branch,
         "state": state,
@@ -118,43 +120,30 @@ def federal_and_state_rows(states: pd.DataFrame) -> list[dict]:
             1, us_population, 2025, POPEST_SOURCE),
     ]
 
-    # Only the 50 states have Senators and governors, so DC and Puerto Rico drop out.
+    for position, seats in CHAMBER_SEATS.items():
+        rows.append(row(slugify(position), position, "Federal", "Legislative", None, "United States",
+                        seats, round(us_population / seats), 2025, POPEST_SOURCE))
+
+    # Only the 50 states have governors, so DC and Puerto Rico drop out.
     state_rows = states[(states["SUMLEV"] == "040") & (states["NAME"].isin(STATE_ABBREVIATIONS))]
     state_rows = state_rows[state_rows["NAME"] != "District of Columbia"]
     for state, people in zip(state_rows["NAME"], state_rows["POPESTIMATE2025"]):
         abbr = STATE_ABBREVIATIONS[state].lower()
-        rows.append(row(f"senator-{abbr}", "US Senator", "Federal", "Legislative", state,
-                        state, 2, people, 2025, POPEST_SOURCE))
         rows.append(row(f"governor-{abbr}", "Governor", "State", "Executive", state,
                         state, 1, people, 2025, POPEST_SOURCE))
     return rows
 
 
-def house_rows(states: pd.DataFrame) -> list[dict]:
-    acs = pd.read_csv(RAW_DIR / "acs_population.dat", sep="|", dtype=str)
-    districts = acs[acs["GEO_ID"].str.startswith("5001900US")].copy()
-    districts["fips"] = districts["GEO_ID"].str[-4:-2]
-    districts["district"] = districts["GEO_ID"].str[-2:]
-
-    # Code 98 marks non-voting delegates (DC and Puerto Rico).
-    districts = districts[districts["district"] != "98"]
-
-    fips_to_state = dict(
-        zip(states.loc[states["SUMLEV"] == "040", "STATE"],
-            states.loc[states["SUMLEV"] == "040", "NAME"])
-    )
-    rows = []
-    for fips, district, people in zip(
-        districts["fips"], districts["district"], districts["B01003_E001"]
-    ):
-        state = fips_to_state[fips]
-        abbr = STATE_ABBREVIATIONS[state].lower()
-        at_large = district == "00"
-        label = "At-Large" if at_large else f"District {int(district)}"
-        position_id = f"rep-{abbr}-{'at-large' if at_large else district}"
-        rows.append(row(position_id, "US Representative", "Federal", "Legislative", state,
-                        f"{state} {label}", 1, people, 2024, ACS_SOURCE))
-    return rows
+def national_rows(states: pd.DataFrame) -> list[dict]:
+    """National positions, with reach based on how many people share that power."""
+    us_population = states.loc[states["SUMLEV"] == "010", "POPESTIMATE2025"].iloc[0]
+    national = pd.read_csv(INPUTS_DIR / "national_positions.csv")
+    return [
+        row(item["position_id"], item["position"], "Federal", item["branch"], None, "United States",
+            item["seats"], round(us_population / item["reach_divisor"]), 2025, POPEST_SOURCE,
+            category=item["category"])
+        for _, item in national.iterrows()
+    ]
 
 
 def clean_city_name(census_name: str) -> str:
@@ -296,9 +285,11 @@ def add_power(positions: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 def check(positions: pd.DataFrame) -> None:
     counts = positions["position"].value_counts().to_dict()
     expected = {
-        "President": 1, "Vice President": 1, "US Senator": 50,
-        "US Representative": 435, "Governor": 50, "Mayor": MAYOR_COUNT,
+        "President": 1, "Vice President": 1, "US Senator": 1,
+        "US Representative": 1, "Governor": 50, "Mayor": MAYOR_COUNT,
     }
+    national = pd.read_csv(INPUTS_DIR / "national_positions.csv")
+    expected |= dict.fromkeys(national["position"], 1)
     assert counts == expected, f"Unexpected row counts: {counts}"
     assert positions["position_id"].is_unique, "Duplicate position_id values"
     assert positions["jurisdiction"].notna().all()
@@ -308,11 +299,6 @@ def check(positions: pd.DataFrame) -> None:
     assert positions["power_score"].between(0, 100).all()
     assert positions[FACTORS].stack().between(0, MAX_FACTOR_SCORE).all()
 
-    # Districts are drawn from the same people as the states, so these should nearly match.
-    house_total = positions.loc[positions["position"] == "US Representative", "people_represented"].sum()
-    state_total = positions.loc[positions["position"] == "Governor", "people_represented"].sum()
-    assert abs(house_total / state_total - 1) < 0.02, (house_total, state_total)
-
 
 def main() -> None:
     download_raw_files()
@@ -320,7 +306,7 @@ def main() -> None:
     states["POPESTIMATE2025"] = states["POPESTIMATE2025"].astype(int)
 
     positions = pd.DataFrame(
-        federal_and_state_rows(states) + house_rows(states) + mayor_rows()
+        federal_and_state_rows(states) + national_rows(states) + mayor_rows()
     )
     positions, results = add_power(add_influence(positions))
     check(positions)
