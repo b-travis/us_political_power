@@ -1,0 +1,8 @@
+group,unilateral,budget,appointments,agenda,decision_share,reason
+President,5,3,5,4,5,"Commands the executive branch and military and issues executive orders; proposes the budget and can veto it but Congress appropriates; appoints the Cabinet and judges with Senate consent; sets the national agenda."
+Vice President,1,0,0,2,1,"Formal powers are limited to presiding over the Senate and breaking ties. Succession and any duties delegated by the President are not counted."
+US Senator,1,2,2,2,2,"One of 100 votes; can slow business individually; votes on budgets and confirms appointments as part of the chamber."
+US Representative,0,2,0,1,1,"One of 435 votes; the House starts spending bills but has no role in confirmations and individual members have little leverage."
+mayor_council,4,4,4,4,5,"Mayor is the chief executive: runs departments, proposes the budget, appoints department heads, and usually holds a veto."
+hybrid,3,2,3,4,3,"Executive power is split between the mayor and a city manager or administrator."
+council_manager,1,1,1,3,2,"Appointed manager runs the city; the mayor chairs the council and is usually one vote among several."

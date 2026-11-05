@@ -14,3 +14,6 @@ wheels/
 
 # Streamlit secrets (API keys, passwords)
 .streamlit/secrets.toml
+
+# Raw Census downloads (rebuilt by scripts/build_positions.py)
+data/raw/
