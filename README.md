@@ -129,6 +129,7 @@ The ranges show how much a result depends on these assumptions. They are not sta
 Built so far:
 
 - A ranked table of all positions, filterable by position type and state, with search
+- A category view that collapses positions into groups such as US Senate and State Governor
 - A chart of reach against influence
 - A chart of each position's rank range across scenarios
 - A scenario selector that re-ranks every position under different assumptions

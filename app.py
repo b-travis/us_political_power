@@ -31,6 +31,15 @@ POSITION_TYPES = [
     "US Representative",
     *MAYOR_TYPES.values(),
 ]
+CATEGORY_GROUPS = {
+    "Congressional leader": "Congressional leaders",
+    "Cabinet secretary": "Cabinet secretaries",
+    "White House": "White House staff",
+    "Other federal": "Other federal officials",
+    "US Senator": "US Senate",
+    "US Representative": "US House",
+    "Governor": "State Governor",
+}
 FACTORS = {
     "unilateral": "Acting alone",
     "budget": "Budget",
@@ -167,6 +176,87 @@ def range_chart(view: pd.DataFrame) -> alt.LayerChart:
         .properties(height=max(120, 24 * len(view)))
         .configure_axis(gridColor=GRID_COLOR, labelColor=MUTED_TEXT, titleColor=MUTED_TEXT, domain=False)
         .configure_view(stroke=None)
+    )
+
+
+def category_summary(view: pd.DataFrame, split_mayors: bool) -> pd.DataFrame:
+    """Collapse positions into general categories, one row per category."""
+    groups = view["position_type"].replace(CATEGORY_GROUPS)
+    mayor_label = groups.str.replace(r"^Mayor \((.*)\)$", r"Large City Mayor (\1)", regex=True)
+    groups = mayor_label if split_mayors else mayor_label.str.replace(r" \(.*\)$", "", regex=True)
+
+    ranked = view.assign(group=groups).sort_values("power_score", ascending=False)
+    summary = ranked.groupby("group", as_index=False).agg(
+        people=("seats", "sum"),
+        typical=("power_score", "median"),
+        low=("power_score", "min"),
+        high=("power_score", "max"),
+        top=("name", "first"),
+        bottom=("name", "last"),
+    )
+    return summary.sort_values("typical", ascending=False)
+
+
+def category_chart(summary: pd.DataFrame) -> alt.LayerChart:
+    y = alt.Y(
+        "group:N", title=None, sort=summary["group"].tolist(), axis=alt.Axis(labelLimit=280, labelFontSize=13)
+    )
+    tooltip = [
+        alt.Tooltip("group:N", title="Category"),
+        alt.Tooltip("people:Q", title="People in these roles", format=","),
+        alt.Tooltip("typical:Q", title="Typical score", format=".1f"),
+        alt.Tooltip("low:Q", title="Lowest score", format=".1f"),
+        alt.Tooltip("high:Q", title="Highest score", format=".1f"),
+    ]
+    ranges = (
+        alt.Chart(summary)
+        .mark_rule(strokeWidth=4, color="#9dc3f0")
+        .encode(
+            x=alt.X(
+                "low:Q", title="Power score", scale=alt.Scale(domain=[0, 100]),
+                axis=alt.Axis(orient="top", tickCount=6),
+            ),
+            x2="high:Q",
+            y=y,
+            tooltip=tooltip,
+        )
+    )
+    dots = (
+        alt.Chart(summary)
+        .mark_circle(size=110, opacity=1, color=LEVEL_COLORS["Federal"], stroke=SURFACE_COLOR, strokeWidth=1)
+        .encode(x="typical:Q", y=y, tooltip=tooltip)
+    )
+    return (
+        (ranges + dots)
+        .properties(height=38 * len(summary))
+        .configure_axis(gridColor=GRID_COLOR, labelColor=MUTED_TEXT, titleColor=MUTED_TEXT, domain=False)
+        .configure_view(stroke=None)
+    )
+
+
+def show_categories(view: pd.DataFrame) -> None:
+    st.subheader("How do the main types of position compare?")
+    st.write(
+        "The dot is the typical (median) power score in each category, and the line runs from the "
+        "lowest to the highest score. Categories with one position or one shared score have no line. "
+        "This view follows the selected scenario and ignores the sidebar filters."
+    )
+    split_mayors = st.checkbox("Split mayors by form of city government")
+    summary = category_summary(view, split_mayors)
+    st.altair_chart(category_chart(summary), width="stretch")
+    st.dataframe(
+        summary,
+        hide_index=True,
+        width="stretch",
+        column_config={
+            "group": st.column_config.TextColumn("Category", width="medium"),
+            "people": st.column_config.NumberColumn("People in these roles", format="localized"),
+            "typical": st.column_config.NumberColumn("Typical score", format="%.1f"),
+            "low": st.column_config.NumberColumn("Lowest", format="%.1f"),
+            "high": st.column_config.NumberColumn("Highest", format="%.1f"),
+            "top": st.column_config.TextColumn("Highest-scoring position"),
+            "bottom": st.column_config.TextColumn("Lowest-scoring position"),
+        },
     )
 
 
@@ -527,8 +617,8 @@ def rankings_page() -> None:
     if search:
         filtered = filtered[filtered["name"].str.contains(search, case=False, regex=False)]
 
-    rankings_tab, chart_tab, range_tab, compare_tab = st.tabs(
-        ["Rankings", "Reach vs. influence", "Rank ranges", "Compare"]
+    rankings_tab, category_tab, chart_tab, range_tab, compare_tab = st.tabs(
+        ["Rankings", "By category", "Reach vs. influence", "Rank ranges", "Compare"]
     )
 
     with rankings_tab:
@@ -537,6 +627,9 @@ def rankings_page() -> None:
             st.info("No positions match these filters.")
         else:
             show_rankings(filtered, len(view))
+
+    with category_tab:
+        show_categories(view)
 
     with chart_tab:
         st.subheader("Which positions have reach, and which have real influence?")
