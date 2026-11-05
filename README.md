@@ -1,6 +1,6 @@
 # US Political Power
 
-A Streamlit app that ranks US political positions by how much power they hold.
+A Streamlit app that ranks US political positions by how much power they hold. It has a searchable ranking, charts, side-by-side comparison, and a full explanation of the method.
 
 ## Goal
 
@@ -44,6 +44,11 @@ Each row is one position in one jurisdiction, such as "Governor of Texas" or "US
 | `unilateral`, `budget`, `appointments`, `agenda`, `decision_share` | Factor scores from 0 to 5 (see below) |
 | `influence_index` | Score from 0 to 100 for how much the position can do |
 | `influence_notes` | Short reason for the score, with a source |
+| `reach_index` | Population on a log scale from 0 to 100 |
+| `power_score` | Final score from 0 to 100, combining reach and influence |
+| `power_rank` | Rank on `power_score`, where 1 is the most powerful. Positions with the same rounded score share a rank. |
+| `power_score_low`, `power_score_high` | Lowest and highest score across all scenarios |
+| `power_rank_best`, `power_rank_worst` | Best and worst rank across all scenarios |
 
 ### Influence index
 
@@ -81,15 +86,51 @@ Known limits of the first cut:
 
 ### Overall ranking
 
-The final rank combines reach and influence. Population ranges from a few thousand to over 300 million, so reach will likely need a log scale. Otherwise, population would swamp the influence index. The exact formula is an open question.
+The final score combines reach and influence, and `data/positions.csv` is sorted by it. Like the influence index, this is a first cut.
+
+Reach uses a log scale, so each tenfold increase in population adds the same amount. Otherwise the President's 340 million people would swamp everything else. A population of 100,000 scores 0, and the US population scores 100:
+
+```
+reach_index = 100 x (log10(people) - log10(100,000)) / (log10(US population) - log10(100,000))
+power_score = square root of (reach_index x influence_index)
+```
+
+The square root of the product is a geometric mean. Unlike a simple average, it means a position needs both reach and influence to score well: the Vice President has maximum reach but scores 40, because influence is low.
+
+### Scenarios
+
+Some results depend heavily on the formula's assumptions, so the build scores every position under several scenarios. The main columns in `data/positions.csv` use the baseline, and the low, high, best, and worst columns show the range across all scenarios.
+
+Scenarios are defined in `data/inputs/scenarios.csv`, one per row. Each sets the population where reach starts at zero, how much weight influence gets, and the scope multipliers. To add a scenario, add a row and rebuild the dataset. The final score generalizes to:
+
+```
+power_score = reach_index ^ (1 - influence_weight) x influence_index ^ influence_weight
+```
+
+| Scenario | What changes |
+| --- | --- |
+| `baseline` | Main method: reach and influence count equally, and reach starts at 100,000 people |
+| `low_reach_floor` | Reach starts at 10,000 people |
+| `high_reach_floor` | Reach starts at 200,000 people |
+| `influence_heavy` | Influence counts twice as much as reach |
+| `reach_heavy` | Reach counts twice as much as influence |
+| `strong_local` | State and city scope rise to 0.9 and 0.7 |
+| `weak_local` | State and city scope fall to 0.7 and 0.3 |
+
+`data/scenario_results.csv` has every position's reach, influence, score, and rank under each scenario.
+
+The ranges show how much a result depends on these assumptions. They are not statistical confidence intervals, and they don't capture uncertainty in the factor scores themselves. Wider or narrower scenarios would give wider or narrower ranges. Scores from different scenarios also aren't on quite the same footing, so ranks are the better way to compare them.
 
 ## Planned features
 
-- A ranked table of all positions, searchable and filterable by level, branch, and state
-- A chart of reach against influence, showing which positions punch above or below their population
-- Side-by-side comparison of any two positions
-- Sliders to change how much reach and influence each count, so users can see how the ranking shifts
-- A page explaining the method and the reasoning behind each score
+Built so far:
+
+- A ranked table of all positions, filterable by position type and state, with search
+- A chart of reach against influence
+- A chart of each position's rank range across scenarios
+- A scenario selector that re-ranks every position under different assumptions
+- Side-by-side comparison of up to five positions
+- A page explaining the method and its limits
 
 Possible later extensions:
 
@@ -131,7 +172,7 @@ These have not been checked or downloaded yet.
 
 ## Open questions
 
-- **Combining the two measures:** should reach and influence be multiplied, added, or left separate as two axes? An early test of influence times log population gave reach too little weight: the Governor of West Virginia ranked above the Governor of California.
+- **Balancing the two measures:** should reach and influence count equally in the final score? The 100,000 floor also needs lowering if smaller positions, such as state legislators, are added.
 - **Weights:** should all five factors count equally? Are the scope multipliers right?
 - **Comparing levels:** can one index fairly compare a federal position to a city position? A mayor may control their city more fully than a Senator controls anything, but over far fewer people and with narrower authority.
 - **Positions without constituents:** Cabinet secretaries are appointed and don't directly represent anyone. Should their reach be the US population, or the people their department affects?

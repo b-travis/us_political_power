@@ -1,0 +1,8 @@
+scenario,description,reach_floor,influence_weight,scope_federal,scope_state,scope_city
+baseline,"Main method: reach and influence count equally, and reach starts at 100,000 people.",100000,0.5,1.0,0.8,0.5
+low_reach_floor,"Reach starts at 10,000 people, which shrinks the gaps between small and large populations.",10000,0.5,1.0,0.8,0.5
+high_reach_floor,"Reach starts at 200,000 people, which widens the gaps between small and large populations.",200000,0.5,1.0,0.8,0.5
+influence_heavy,"Influence counts twice as much as reach.",100000,0.6667,1.0,0.8,0.5
+reach_heavy,"Reach counts twice as much as influence.",100000,0.3333,1.0,0.8,0.5
+strong_local,"State and city powers are discounted less compared to federal.",100000,0.5,1.0,0.9,0.7
+weak_local,"State and city powers are discounted more compared to federal.",100000,0.5,1.0,0.7,0.3

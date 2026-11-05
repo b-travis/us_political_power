@@ -1,4 +1,4 @@
-"""Build data/positions.csv: the Phase 1 positions, population, and influence index.
+"""Build data/positions.csv: the Phase 1 positions, influence index, and power ranking.
 
 Run from the project root:
 
@@ -11,6 +11,7 @@ The influence index is built from the hand-maintained files in data/inputs/.
 See the "Influence index" section of the README for the method.
 """
 
+import math
 import re
 import urllib.request
 from pathlib import Path
@@ -21,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
 INPUTS_DIR = ROOT / "data" / "inputs"
 OUTPUT = ROOT / "data" / "positions.csv"
+SCENARIO_OUTPUT = ROOT / "data" / "scenario_results.csv"
 
 POPEST = "https://www2.census.gov/programs-surveys/popest/datasets/2020-2025"
 ACS = "https://www2.census.gov/programs-surveys/acs/summary_file/2024/table-based-SF/data/1YRData"
@@ -37,10 +39,6 @@ MAYOR_COUNT = 100
 
 FACTORS = ["unilateral", "budget", "appointments", "agenda", "decision_share"]
 MAX_FACTOR_SCORE = 5
-
-# How broad the powers of each level of government are, as a share of federal.
-# States hold general lawmaking power; cities have only what states give them.
-SCOPE_MULTIPLIERS = {"Federal": 1.0, "State": 0.8, "City": 0.5}
 
 # Beyle's index has no measure of a governor's agenda power, so every governor
 # gets the same score for it.
@@ -216,6 +214,17 @@ def governor_factors() -> pd.DataFrame:
     })
 
 
+def influence_for(positions: pd.DataFrame, scenario: pd.Series) -> pd.Series:
+    """Share of the possible factor points, scaled by the scope of each level."""
+    control = positions[FACTORS].sum(axis=1) / (len(FACTORS) * MAX_FACTOR_SCORE)
+    scope = positions["level"].map({
+        "Federal": scenario["scope_federal"],
+        "State": scenario["scope_state"],
+        "City": scenario["scope_city"],
+    })
+    return (100 * control * scope).round(1)
+
+
 def add_influence(positions: pd.DataFrame) -> pd.DataFrame:
     rubric = pd.read_csv(INPUTS_DIR / "influence_rubric.csv").set_index("group")
     cities = pd.read_csv(INPUTS_DIR / "city_government_types.csv").fillna("")
@@ -239,10 +248,49 @@ def add_influence(positions: pd.DataFrame) -> pd.DataFrame:
 
     scores = positions.apply(score, axis=1)
     scores[FACTORS] = scores[FACTORS].astype(float)
-    control = scores[FACTORS].sum(axis=1) / (len(FACTORS) * MAX_FACTOR_SCORE)
-    scope = positions["level"].map(SCOPE_MULTIPLIERS)
-    scores["influence_index"] = (100 * control * scope).round(1)
-    return pd.concat([positions, scores[FACTORS + ["influence_index", "influence_notes"]]], axis=1)
+    return pd.concat([positions, scores[FACTORS + ["influence_notes"]]], axis=1)
+
+
+def score_scenario(positions: pd.DataFrame, scenario: pd.Series) -> pd.DataFrame:
+    """Score and rank every position under one scenario."""
+    floor = scenario["reach_floor"]
+    assert floor < positions["people_represented"].min(), "reach_floor is above the smallest position"
+    top = math.log10(positions["people_represented"].max())
+    log_people = positions["people_represented"].map(math.log10)
+    reach = 100 * (log_people - math.log10(floor)) / (top - math.log10(floor))
+    influence = influence_for(positions, scenario)
+
+    # Weighted geometric mean: a position needs both reach and influence to score well.
+    weight = scenario["influence_weight"]
+    score = (reach.pow(1 - weight) * influence.pow(weight)).round(1)
+    return pd.DataFrame({
+        "position_id": positions["position_id"],
+        "scenario": scenario["scenario"],
+        "reach_index": reach.round(1),
+        "influence_index": influence,
+        "power_score": score,
+        "power_rank": score.rank(method="min", ascending=False).astype(int),
+    })
+
+
+def add_power(positions: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Add baseline scores and scenario ranges. Also return all scenario results."""
+    scenarios = pd.read_csv(INPUTS_DIR / "scenarios.csv")
+    assert scenarios["scenario"].iloc[0] == "baseline", "First scenario must be the baseline"
+    results = pd.concat(
+        [score_scenario(positions, scenario) for _, scenario in scenarios.iterrows()],
+        ignore_index=True,
+    )
+
+    baseline = results[results["scenario"] == "baseline"].drop(columns="scenario")
+    ranges = results.groupby("position_id").agg(
+        power_score_low=("power_score", "min"),
+        power_score_high=("power_score", "max"),
+        power_rank_best=("power_rank", "min"),
+        power_rank_worst=("power_rank", "max"),
+    )
+    positions = positions.merge(baseline, on="position_id").merge(ranges, on="position_id")
+    return positions, results
 
 
 def check(positions: pd.DataFrame) -> None:
@@ -256,6 +304,8 @@ def check(positions: pd.DataFrame) -> None:
     assert positions["jurisdiction"].notna().all()
     assert (positions["people_represented"] > 0).all()
     assert positions["influence_index"].between(0, 100).all()
+    assert positions["reach_index"].between(0, 100).all()
+    assert positions["power_score"].between(0, 100).all()
     assert positions[FACTORS].stack().between(0, MAX_FACTOR_SCORE).all()
 
     # Districts are drawn from the same people as the states, so these should nearly match.
@@ -272,11 +322,15 @@ def main() -> None:
     positions = pd.DataFrame(
         federal_and_state_rows(states) + house_rows(states) + mayor_rows()
     )
-    positions = add_influence(positions)
+    positions, results = add_power(add_influence(positions))
     check(positions)
-    positions = positions.sort_values("people_represented", ascending=False, kind="stable")
+    positions = positions.sort_values(
+        ["power_rank", "people_represented"], ascending=[True, False], kind="stable"
+    )
     positions.to_csv(OUTPUT, index=False)
+    results.to_csv(SCENARIO_OUTPUT, index=False)
     print(f"Wrote {len(positions)} positions to {OUTPUT.relative_to(ROOT)}")
+    print(f"Wrote {len(results)} scenario results to {SCENARIO_OUTPUT.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
