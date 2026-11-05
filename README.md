@@ -79,7 +79,7 @@ The factor scores come from different places:
 
 Known limits of the first cut:
 
-- **National reach shares are simplified, and they matter.** Dividing by 15 treats every Cabinet department alike, though their sizes differ widely, and it puts Cabinet secretaries well below congressional leaders. Sharing power also lowers an appointee's decision share, so that fact counts twice.
+- **National reach shares are judgment calls, and they matter.** They set much of the order at the top of the ranking. Sharing power also lowers an appointee's decision share, so that fact counts twice.
 - **The five factors fit some roles poorly.** They don't capture the Supreme Court's final say or the Federal Reserve's power over interest rates.
 - **Governor data is old.** The latest Beyle scores found are from 2007, so some states will have changed.
 - **Party control is left out.** Beyle's index includes it, but it depends on who holds office, not on the position. Tenure is left out too, since it doesn't map to any of the five factors.
@@ -159,7 +159,7 @@ Choices and limits in the Phase 1 data:
 - **Mayors:** the 100 largest cities by population, which is a starting cutoff and easy to change.
 - **County-wide mayors:** Honolulu and Baton Rouge use county or parish population, because their mayors govern more than the Census city area. Indianapolis, Louisville, and Nashville use their consolidated city-county population.
 - **DC and territories:** the Mayor of DC is included as a city mayor. DC's non-voting delegate and all US territories are left out for now.
-- **National positions:** reach is the US population divided by the number of people sharing that power, set by `reach_divisor` in `data/inputs/national_positions.csv`. The President and Vice President are elected nationally and get the whole country. Senators get 1/100, Representatives 1/435, justices 1/9, the Federal Reserve Chair 1/12, Cabinet and senior presidential roles 1/15, chamber leaders 1/2, and minority leaders and the House Majority Leader 1/4. Population by state or district is not used for Congress.
+- **National positions:** reach is the US population divided by the number of people sharing that power, set by `reach_divisor` in `data/inputs/national_positions.csv`. The President and Vice President are elected nationally and get the whole country. The Speaker and Senate Majority Leader get 1/2. The inner Cabinet (State, Treasury, Defense, and the Attorney General) and Senate Minority Leader get 1/4, and the House Majority and Minority Leaders get 1/8. Justices get 1/9, the Federal Reserve Chair 1/12, other Cabinet and senior presidential roles 1/15, Senators 1/100, and Representatives 1/435. Budget shares were considered for the Cabinet but rejected, because they would give the Secretary of State and Attorney General very little reach. Population by state or district is not used for Congress.
 
 ### Candidates
 
@@ -179,7 +179,7 @@ These have not been checked or downloaded yet.
 - **Spending controlled:** should the method use the budget each position controls? It may suit the mayor and governor comparison better than a flat scope multiplier: New York City's budget is far larger than Wyoming's or Vermont's. State GDP was tested and is nearly identical to population (correlation 0.99). Land area was tested and is unrelated to population (0.2), but it doesn't clearly measure power.
 - **Weights:** should all five factors count equally? Are the scope multipliers right?
 - **Comparing levels:** can one index fairly compare a federal position to a city position? A mayor may control their city more fully than a Senator controls anything, but over far fewer people and with narrower authority.
-- **National reach shares:** are the divisors right? Would budget or the people a department affects be a better basis than a flat 1/15 for Cabinet and senior presidential roles?
+- **National reach shares:** are the divisors right? Would the people a department affects be a better basis?
 - **Mayor cutoff:** the US has thousands of mayors. The list currently stops at the largest 100 cities. Is that the right place to stop?
 - **Territories and DC:** should US territories and non-voting delegates be added?
 - **More positions:** should the list add the remaining Cabinet secretaries or committee chairs?

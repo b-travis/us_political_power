@@ -1,19 +1,19 @@
 position_id,position,category,branch,seats,reach_divisor,reach_basis
 speaker-of-the-house,Speaker of the House,Congressional leader,Legislative,1,2,Steers one of the two chambers of Congress
 senate-majority-leader,Senate Majority Leader,Congressional leader,Legislative,1,2,Steers one of the two chambers of Congress
-senate-minority-leader,Senate Minority Leader,Congressional leader,Legislative,1,4,Holds a smaller share of a chamber: leads the minority or works under the Speaker
-house-majority-leader,House Majority Leader,Congressional leader,Legislative,1,4,Holds a smaller share of a chamber: leads the minority or works under the Speaker
-house-minority-leader,House Minority Leader,Congressional leader,Legislative,1,4,Holds a smaller share of a chamber: leads the minority or works under the Speaker
-secretary-of-state,Secretary of State,Cabinet secretary,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-secretary-of-the-treasury,Secretary of the Treasury,Cabinet secretary,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-secretary-of-defense,Secretary of Defense,Cabinet secretary,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-attorney-general,Attorney General,Cabinet secretary,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-secretary-of-homeland-security,Secretary of Homeland Security,Cabinet secretary,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-secretary-of-health-and-human-services,Secretary of Health and Human Services,Cabinet secretary,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-white-house-chief-of-staff,White House Chief of Staff,White House,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-national-security-advisor,National Security Advisor,White House,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
-omb-director,Director of the Office of Management and Budget,White House,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
+senate-minority-leader,Senate Minority Leader,Congressional leader,Legislative,1,4,"Can block most legislation with the filibuster, so holds a share of Senate control"
+house-majority-leader,House Majority Leader,Congressional leader,Legislative,1,8,Doesn't independently control the chamber: works under the Speaker or leads the House minority
+house-minority-leader,House Minority Leader,Congressional leader,Legislative,1,8,Doesn't independently control the chamber: works under the Speaker or leads the House minority
+secretary-of-state,Secretary of State,Cabinet secretary,Executive,1,4,"One of the four senior Cabinet departments, the inner Cabinet"
+secretary-of-the-treasury,Secretary of the Treasury,Cabinet secretary,Executive,1,4,"One of the four senior Cabinet departments, the inner Cabinet"
+secretary-of-defense,Secretary of Defense,Cabinet secretary,Executive,1,4,"One of the four senior Cabinet departments, the inner Cabinet"
+attorney-general,Attorney General,Cabinet secretary,Executive,1,4,"One of the four senior Cabinet departments, the inner Cabinet"
+secretary-of-homeland-security,Secretary of Homeland Security,Cabinet secretary,Executive,1,15,One of the remaining Cabinet departments or senior roles acting on the President's authority
+secretary-of-health-and-human-services,Secretary of Health and Human Services,Cabinet secretary,Executive,1,15,One of the remaining Cabinet departments or senior roles acting on the President's authority
+white-house-chief-of-staff,White House Chief of Staff,White House,Executive,1,15,One of the remaining Cabinet departments or senior roles acting on the President's authority
+national-security-advisor,National Security Advisor,White House,Executive,1,15,One of the remaining Cabinet departments or senior roles acting on the President's authority
+omb-director,Director of the Office of Management and Budget,White House,Executive,1,15,One of the remaining Cabinet departments or senior roles acting on the President's authority
 chief-justice,Chief Justice of the United States,Supreme Court,Judicial,1,9,One of nine justices
 associate-justice,Associate Justice of the Supreme Court,Supreme Court,Judicial,8,9,One of nine justices
 federal-reserve-chair,Chair of the Federal Reserve,Other federal,Independent,1,12,One of 12 votes on the committee that sets interest rates
-joint-chiefs-chair,Chairman of the Joint Chiefs of Staff,Other federal,Executive,1,15,One of the 15 Cabinet departments or senior roles acting on the President's authority
+joint-chiefs-chair,Chairman of the Joint Chiefs of Staff,Other federal,Executive,1,15,One of the remaining Cabinet departments or senior roles acting on the President's authority
