@@ -11,7 +11,6 @@ The influence index is built from the hand-maintained files in data/inputs/.
 See the "Influence index" section of the README for the method.
 """
 
-import math
 import re
 import urllib.request
 from pathlib import Path
@@ -242,11 +241,9 @@ def add_influence(positions: pd.DataFrame) -> pd.DataFrame:
 
 def score_scenario(positions: pd.DataFrame, scenario: pd.Series) -> pd.DataFrame:
     """Score and rank every position under one scenario."""
-    floor = scenario["reach_floor"]
-    assert floor < positions["people_represented"].min(), "reach_floor is above the smallest position"
-    top = math.log10(positions["people_represented"].max())
-    log_people = positions["people_represented"].map(math.log10)
-    reach = 100 * (log_people - math.log10(floor)) / (top - math.log10(floor))
+    # Reach is a root of the share of the US population, so 100 means the whole country.
+    us_population = positions["people_represented"].max()
+    reach = 100 * (positions["people_represented"] / us_population).pow(scenario["reach_exponent"])
     influence = influence_for(positions, scenario)
 
     # Weighted geometric mean: a position needs both reach and influence to score well.

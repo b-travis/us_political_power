@@ -45,7 +45,7 @@ Each row is one position in one jurisdiction, such as "Governor of Texas". Rank-
 | `unilateral`, `budget`, `appointments`, `agenda`, `decision_share` | Factor scores from 0 to 5 (see below) |
 | `influence_index` | Score from 0 to 100 for how much the position can do |
 | `influence_notes` | Short reason for the score, with a source |
-| `reach_index` | Population on a log scale from 0 to 100 |
+| `reach_index` | Cube root of the share of the US population, from 0 to 100 |
 | `power_score` | Final score from 0 to 100, combining reach and influence |
 | `power_rank` | Rank on `power_score`, where 1 is the most powerful. Positions with the same rounded score share a rank. |
 | `power_score_low`, `power_score_high` | Lowest and highest score across all scenarios |
@@ -79,7 +79,7 @@ The factor scores come from different places:
 
 Known limits of the first cut:
 
-- **National reach shares are simplified.** Dividing by 15 treats every Cabinet department alike, though their sizes differ widely. Sharing power also lowers an appointee's decision share, so that fact counts twice.
+- **National reach shares are simplified, and they matter.** Dividing by 15 treats every Cabinet department alike, though their sizes differ widely, and it puts Cabinet secretaries well below congressional leaders. Sharing power also lowers an appointee's decision share, so that fact counts twice.
 - **The five factors fit some roles poorly.** They don't capture the Supreme Court's final say or the Federal Reserve's power over interest rates.
 - **Governor data is old.** The latest Beyle scores found are from 2007, so some states will have changed.
 - **Party control is left out.** Beyle's index includes it, but it depends on who holds office, not on the position. Tenure is left out too, since it doesn't map to any of the five factors.
@@ -91,10 +91,10 @@ Known limits of the first cut:
 
 The final score combines reach and influence, and `data/positions.csv` is sorted by it. Like the influence index, this is a first cut.
 
-Reach uses a log scale, so each tenfold increase in population adds the same amount. Otherwise the President's 340 million people would swamp everything else. A population of 100,000 scores 0, and the US population scores 100:
+Reach uses a cube root of the position's share of the US population. Raw population would swamp everything else, since the President represents about 580 times as many people as Wyoming's governor. A cube root reduces that to 8.3 times. A log scale was tried first, but it reduced the gap to 4.6 times and needed an arbitrary starting point.
 
 ```
-reach_index = 100 x (log10(people) - log10(100,000)) / (log10(US population) - log10(100,000))
+reach_index = 100 x (people / US population) ^ (1/3)
 power_score = square root of (reach_index x influence_index)
 ```
 
@@ -104,7 +104,7 @@ The square root of the product is a geometric mean. Unlike a simple average, it 
 
 Some results depend heavily on the formula's assumptions, so the build scores every position under several scenarios. The main columns in `data/positions.csv` use the baseline, and the low, high, best, and worst columns show the range across all scenarios.
 
-Scenarios are defined in `data/inputs/scenarios.csv`, one per row. Each sets the population where reach starts at zero, how much weight influence gets, and the scope multipliers. To add a scenario, add a row and rebuild the dataset. The final score generalizes to:
+Scenarios are defined in `data/inputs/scenarios.csv`, one per row. Each sets the root used for reach, how much weight influence gets, and the scope multipliers. To add a scenario, add a row and rebuild the dataset. The final score generalizes to:
 
 ```
 power_score = reach_index ^ (1 - influence_weight) x influence_index ^ influence_weight
@@ -112,9 +112,9 @@ power_score = reach_index ^ (1 - influence_weight) x influence_index ^ influence
 
 | Scenario | What changes |
 | --- | --- |
-| `baseline` | Main method: reach and influence count equally, and reach starts at 100,000 people |
-| `low_reach_floor` | Reach starts at 10,000 people |
-| `high_reach_floor` | Reach starts at 200,000 people |
+| `baseline` | Main method: reach uses a cube root, and reach and influence count equally |
+| `flatter_reach` | Reach uses a fourth root |
+| `steeper_reach` | Reach uses a square root |
 | `influence_heavy` | Influence counts twice as much as reach |
 | `reach_heavy` | Reach counts twice as much as influence |
 | `strong_local` | State and city scope rise to 0.9 and 0.7 |
@@ -174,7 +174,7 @@ These have not been checked or downloaded yet.
 ## Open questions
 
 - **Balancing the two measures:** should reach and influence count equally in the final score?
-- **Reach scale:** is log the right scale? It compresses population heavily, and its 100,000 floor is arbitrary and must drop if smaller positions, such as state legislators, are added. A power scale such as a cube root needs no floor. Across scales tested, most ranks barely moved, but the Vice President ranged from 4th to 66th.
+- **Reach scale:** the cube root is a judgment call. The Vice President ranked from 4th to 66th across the scales tested, from raw population to log.
 - **Spending controlled:** should the method use the budget each position controls? It may suit the mayor and governor comparison better than a flat scope multiplier: New York City's budget is far larger than Wyoming's or Vermont's. State GDP was tested and is nearly identical to population (correlation 0.99). Land area was tested and is unrelated to population (0.2), but it doesn't clearly measure power.
 - **Weights:** should all five factors count equally? Are the scope multipliers right?
 - **Comparing levels:** can one index fairly compare a federal position to a city position? A mayor may control their city more fully than a Senator controls anything, but over far fewer people and with narrower authority.

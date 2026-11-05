@@ -196,7 +196,7 @@ def show_rankings(view: pd.DataFrame, total: int) -> None:
                 "People represented", help="Population of the position's jurisdiction. National positions use their share of the US population.", format="localized"
             ),
             "reach_index": st.column_config.NumberColumn(
-                "Reach", help="Population on a log scale from 0 to 100.", format="%.1f"
+                "Reach", help="The cube root of the position's share of the US population, from 0 to 100.", format="%.1f"
             ),
             "influence_index": st.column_config.NumberColumn(
                 "Influence", help="How much the position can do, from 0 to 100.", format="%.1f"
@@ -260,10 +260,11 @@ def methodology_page() -> None:
 
     st.subheader("Step 1: Reach")
     st.write(
-        "Reach is the number of people the position represents, on a log scale from 0 to 100. "
-        "On a log scale, every tenfold increase in population adds the same number of points. "
-        f"A population of {baseline['reach_floor']:,.0f} scores 0, and the US population scores 100."
+        "Reach is based on the number of people the position represents, as a share of the US "
+        "population. It uses a cube root, so the gaps between large and small populations shrink "
+        "but still matter. The US population scores 100, and 1/8 of it scores 50."
     )
+    st.latex(r"\text{reach} = 100 \times \left(\frac{\text{people}}{\text{US population}}\right)^{1/3}")
     st.write(
         "Governors and mayors use the population of their state or city. National positions don't "
         "represent a place, so they follow one rule: **the US population divided by the number of "
@@ -364,14 +365,14 @@ def methodology_page() -> None:
     st.table(
         scenarios.assign(
             scenario=scenarios["scenario"].map(scenario_label),
-            reach_floor=scenarios["reach_floor"].map("{:,}".format),
+            reach_exponent=scenarios["reach_exponent"].map("{:.2f}".format),
             influence_weight=scenarios["influence_weight"].map("{:.2f}".format),
             scope_federal=scenarios["scope_federal"].map("{:.1f}".format),
             scope_state=scenarios["scope_state"].map("{:.1f}".format),
             scope_city=scenarios["scope_city"].map("{:.1f}".format),
         )
         .rename(columns={
-            "scenario": "Scenario", "description": "What changes", "reach_floor": "Reach starts at",
+            "scenario": "Scenario", "description": "What changes", "reach_exponent": "Reach exponent",
             "influence_weight": "Influence weight", "scope_federal": "Federal scope",
             "scope_state": "State scope", "scope_city": "City scope",
         })
@@ -385,14 +386,14 @@ def methodology_page() -> None:
     )
 
     st.subheader("Common questions")
-    st.write("**Why use a log scale for population?**")
+    st.write("**Why use a cube root for population?**")
     st.write(
-        "It's a judgment call. Without one, population overwhelms everything else: on a straight "
-        "population scale, the Vice President jumps from 66th to 4th despite having few formal "
-        "powers. A log scale may go too far the other way. The President represents about 580 "
-        "times as many people as Wyoming's governor but gets only 4.6 times the reach. In tests of "
-        "straight, square root, cube root, fourth root, and log scales, many ranks moved modestly: "
-        "the Mayor of New York stayed between 38th and 46th. The Vice President moved the most."
+        "It's a judgment call. Raw population overwhelms everything else: the President represents "
+        "about 580 times as many people as Wyoming's governor, and on that scale the Vice President "
+        "ranks 4th despite having few formal powers. A log scale goes the other way, leaving only "
+        "4.6 times the reach and needing an arbitrary starting point. A cube root sits between "
+        "them, with 8.3 times the reach. The choice matters most for the Vice President, who ranks "
+        "from 4th to 66th across these scales. The Mayor of New York stays between 38th and 46th."
     )
     st.write("**Why do all Senators score the same, whatever their state's population?**")
     st.write(
@@ -402,9 +403,9 @@ def methodology_page() -> None:
     )
     st.write("**Are big-city mayors really less powerful than small-state governors?**")
     st.write(
-        "Not all of them. New York's mayor outranks 23 governors under the main method, and "
-        "outranks Wyoming's governor in every scenario. Nine mayors outrank Wyoming's governor, "
-        "and four outrank Alaska's. Budgets suggest the method may still underrate the largest "
+        "Not all of them. New York's mayor outranks 26 governors under the main method, and "
+        "outranks Wyoming's governor in every scenario. Six mayors outrank Wyoming's governor, "
+        "and three outrank Alaska's. Budgets suggest the method may still underrate the largest "
         "cities. New York City's budget is about $116 billion a year, against about $9 billion "
         "for Vermont and about $5 billion for Wyoming. Governors do hold powers mayors lack, "
         "including state lawmaking, and a state can override its cities. City and state budgets "
@@ -439,9 +440,10 @@ def methodology_page() -> None:
         "- **Formal powers only.** The index leaves out informal power, including the Vice "
         "President's place in the line of succession, or a member of Congress's seniority or "
         "committee role.\n"
-        "- **National reach shares are simplified.** Dividing by 15 treats every Cabinet department "
-        "alike, though their sizes differ widely. Sharing power also lowers an appointee's decision "
-        "share, so that fact counts twice.\n"
+        "- **National reach shares are simplified, and they matter.** Dividing by 15 treats every "
+        "Cabinet department alike, though their sizes differ widely, and it puts Cabinet secretaries "
+        "well below congressional leaders. Sharing power also lowers an appointee's decision share, "
+        "so that fact counts twice.\n"
         "- **The five factors fit some roles poorly.** They were built for executives and "
         "legislators, so they don't capture the Supreme Court's final say or the Federal "
         "Reserve's power over interest rates.\n"
@@ -486,7 +488,7 @@ def rankings_page() -> None:
     with st.container(border=True):
         st.markdown("**How the ranking works**")
         reach_col, influence_col, power_col = st.columns(3)
-        reach_col.markdown("**Reach (0–100)**  \nHow many people the position represents, on a log scale.")
+        reach_col.markdown("**Reach (0–100)**  \nHow many people the position represents, using a cube root of its share of the US population.")
         influence_col.markdown(
             "**Influence (0–100)**  \nHow much it can do: acting alone, budget, appointments, agenda, "
             "and decision share, adjusted for level of government."
