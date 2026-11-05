@@ -397,16 +397,35 @@ def methodology_page() -> None:
     )
     st.write(
         "The index is the share of the 25 possible points, multiplied by the **scope** of that "
-        "level of government. States have general lawmaking power, while cities have only the "
-        "powers their state gives them."
+        "level of government and by a **borrowed-power discount**. States have general lawmaking "
+        "power, while cities have only the powers their state gives them."
     )
-    st.latex(r"\text{influence} = 100 \times \frac{\text{sum of the five factors}}{25} \times \text{scope}")
+    st.latex(r"\text{influence} = 100 \times \frac{\text{sum of the five factors}}{25} \times \text{scope} \times \text{discount}")
     st.dataframe(
         pd.DataFrame({
             "Level": ["Federal", "State", "City"],
             "Scope": [baseline["scope_federal"], baseline["scope_state"], baseline["scope_city"]],
         }),
         hide_index=True,
+    )
+
+    st.write(
+        "The discount reflects that some power really belongs to someone else. A Cabinet secretary "
+        "acts on the President's authority and can be removed, and a congressional leader needs "
+        "the support of members. Justices, the Federal Reserve Chair, and elected executives "
+        "aren't discounted."
+    )
+    st.table(
+        pd.DataFrame({
+            "Where the power comes from": [
+                "The President (Cabinet, White House staff, Chairman of the Joint Chiefs)",
+                "Congress (congressional leaders)",
+                "The position itself (all others)",
+            ],
+            "Share of influence kept": [
+                f"{baseline['discount_president']:.0%}", f"{baseline['discount_congress']:.0%}", "100%",
+            ],
+        }).set_index("Where the power comes from")
     )
 
     st.write("**Where the factor scores come from**")
@@ -460,11 +479,14 @@ def methodology_page() -> None:
             scope_federal=scenarios["scope_federal"].map("{:.1f}".format),
             scope_state=scenarios["scope_state"].map("{:.1f}".format),
             scope_city=scenarios["scope_city"].map("{:.1f}".format),
+            discount_president=scenarios["discount_president"].map("{:.0%}".format),
+            discount_congress=scenarios["discount_congress"].map("{:.0%}".format),
         )
         .rename(columns={
             "scenario": "Scenario", "description": "What changes", "reach_exponent": "Reach exponent",
             "influence_weight": "Influence weight", "scope_federal": "Federal scope",
             "scope_state": "State scope", "scope_city": "City scope",
+            "discount_president": "Appointees keep", "discount_congress": "Congress leaders keep",
         })
         .set_index("Scenario")
     )
@@ -483,7 +505,7 @@ def methodology_page() -> None:
         "ranks 4th despite having few formal powers. A log scale goes the other way, leaving only "
         "4.6 times the reach and needing an arbitrary starting point. A cube root sits between "
         "them, with 8.3 times the reach. The choice matters most for the Vice President, who ranks "
-        "from 4th to 66th across these scales. The Mayor of New York stays between 38th and 46th."
+        "from 4th to 65th across these scales. The Mayor of New York stays between 38th and 43rd."
     )
     st.write("**Why do all Senators score the same, whatever their state's population?**")
     st.write(
@@ -531,8 +553,8 @@ def methodology_page() -> None:
         "President's place in the line of succession, or a member of Congress's seniority or "
         "committee role.\n"
         "- **National reach shares are judgment calls, and they matter.** They set much of the order "
-        "at the top of the ranking. Sharing power also lowers an appointee's decision share, so that "
-        "fact counts twice.\n"
+        "at the top of the ranking, as do the borrowed-power discounts. An appointee's dependence on "
+        "the President lowers decision share, reach, and the discount, so it counts more than once.\n"
         "- **The five factors fit some roles poorly.** They were built for executives and "
         "legislators, so they don't capture the Supreme Court's final say or the Federal "
         "Reserve's power over interest rates.\n"

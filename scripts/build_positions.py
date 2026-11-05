@@ -94,11 +94,13 @@ def slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
-def row(position_id, position, level, branch, state, jurisdiction, seats, people, year, source, category=None):
+def row(position_id, position, level, branch, state, jurisdiction, seats, people, year, source,
+        category=None, power_source="own"):
     return {
         "position_id": position_id,
         "position": position,
         "category": category,
+        "power_source": power_source,
         "level": level,
         "branch": branch,
         "state": state,
@@ -140,7 +142,7 @@ def national_rows(states: pd.DataFrame) -> list[dict]:
     return [
         row(item["position_id"], item["position"], "Federal", item["branch"], None, "United States",
             item["seats"], round(us_population / item["reach_divisor"]), 2025, POPEST_SOURCE,
-            category=item["category"])
+            category=item["category"], power_source=item["power_source"])
         for _, item in national.iterrows()
     ]
 
@@ -203,14 +205,20 @@ def governor_factors() -> pd.DataFrame:
 
 
 def influence_for(positions: pd.DataFrame, scenario: pd.Series) -> pd.Series:
-    """Share of the possible factor points, scaled by the scope of each level."""
+    """Share of the possible factor points, scaled by scope and by where the power comes from."""
     control = positions[FACTORS].sum(axis=1) / (len(FACTORS) * MAX_FACTOR_SCORE)
     scope = positions["level"].map({
         "Federal": scenario["scope_federal"],
         "State": scenario["scope_state"],
         "City": scenario["scope_city"],
     })
-    return (100 * control * scope).round(1)
+    # Appointees and congressional leaders hold power that others can take back.
+    discount = positions["power_source"].map({
+        "own": 1.0,
+        "president": scenario["discount_president"],
+        "congress": scenario["discount_congress"],
+    })
+    return (100 * control * scope * discount).round(1)
 
 
 def add_influence(positions: pd.DataFrame) -> pd.DataFrame:
@@ -236,6 +244,11 @@ def add_influence(positions: pd.DataFrame) -> pd.DataFrame:
 
     scores = positions.apply(score, axis=1)
     scores[FACTORS] = scores[FACTORS].astype(float)
+    borrowed = {
+        "president": " Influence is discounted because this power comes from the President.",
+        "congress": " Influence is discounted because this power depends on the support of members.",
+    }
+    scores["influence_notes"] += positions["power_source"].map(borrowed).fillna("")
     return pd.concat([positions, scores[FACTORS + ["influence_notes"]]], axis=1)
 
 

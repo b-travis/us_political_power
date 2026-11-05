@@ -34,6 +34,7 @@ Each row is one position in one jurisdiction, such as "Governor of Texas". Rank-
 | `position_id` | Short unique ID for the position |
 | `position` | Title of the position |
 | `category` | Group for national positions, such as Cabinet secretary (blank for others) |
+| `power_source` | Where the power comes from: own, president, or congress |
 | `level` | Federal, state, or city |
 | `branch` | Executive, legislative, judicial, or independent |
 | `state` | State the position belongs to (blank for President and Vice President) |
@@ -61,11 +62,13 @@ This is a first cut, and the scores are judgment calls that should be challenged
 - **Agenda control:** does it decide what gets considered?
 - **Decision share:** how much of the decision does it hold? A sole executive holds all of it, and one of 435 representatives holds very little.
 
-The index is the share of the 25 possible points, scaled by how broad that level of government's powers are:
+The index is the share of the 25 possible points, scaled by how broad that level of government's powers are and by a borrowed-power discount:
 
 ```
-influence_index = 100 x (sum of factors / 25) x scope
+influence_index = 100 x (sum of factors / 25) x scope x discount
 ```
+
+The discount reflects that some power belongs to someone else. Presidential appointees keep 70% of their influence, because they act on the President's authority and can be removed. Congressional leaders keep 85%, because they need the support of members. Everyone else keeps 100%.
 
 Scope is 1.0 for federal, 0.8 for state, and 0.5 for city positions. States hold general lawmaking power, while cities have only the powers their state gives them. These multipliers are judgment calls.
 
@@ -79,7 +82,7 @@ The factor scores come from different places:
 
 Known limits of the first cut:
 
-- **National reach shares are judgment calls, and they matter.** They set much of the order at the top of the ranking. Sharing power also lowers an appointee's decision share, so that fact counts twice.
+- **National reach shares are judgment calls, and they matter.** They set much of the order at the top of the ranking. So do the borrowed-power discounts. An appointee's dependence on the President lowers decision share, reach, and the discount, so it counts more than once.
 - **The five factors fit some roles poorly.** They don't capture the Supreme Court's final say or the Federal Reserve's power over interest rates.
 - **Governor data is old.** The latest Beyle scores found are from 2007, so some states will have changed.
 - **Party control is left out.** Beyle's index includes it, but it depends on who holds office, not on the position. Tenure is left out too, since it doesn't map to any of the five factors.
@@ -104,7 +107,7 @@ The square root of the product is a geometric mean. Unlike a simple average, it 
 
 Some results depend heavily on the formula's assumptions, so the build scores every position under several scenarios. The main columns in `data/positions.csv` use the baseline, and the low, high, best, and worst columns show the range across all scenarios.
 
-Scenarios are defined in `data/inputs/scenarios.csv`, one per row. Each sets the root used for reach, how much weight influence gets, and the scope multipliers. To add a scenario, add a row and rebuild the dataset. The final score generalizes to:
+Scenarios are defined in `data/inputs/scenarios.csv`, one per row. Each sets the root used for reach, how much weight influence gets, the scope multipliers, and the borrowed-power discounts. To add a scenario, add a row and rebuild the dataset. The final score generalizes to:
 
 ```
 power_score = reach_index ^ (1 - influence_weight) x influence_index ^ influence_weight
@@ -119,6 +122,8 @@ power_score = reach_index ^ (1 - influence_weight) x influence_index ^ influence
 | `reach_heavy` | Reach counts twice as much as influence |
 | `strong_local` | State and city scope rise to 0.9 and 0.7 |
 | `weak_local` | State and city scope fall to 0.7 and 0.3 |
+| `no_discount` | Appointees and congressional leaders keep all of their influence |
+| `heavy_discount` | Appointees keep 50% of their influence, and congressional leaders keep 70% |
 
 `data/scenario_results.csv` has every position's reach, influence, score, and rank under each scenario.
 
@@ -175,7 +180,7 @@ These have not been checked or downloaded yet.
 ## Open questions
 
 - **Balancing the two measures:** should reach and influence count equally in the final score?
-- **Reach scale:** the cube root is a judgment call. The Vice President ranked from 4th to 66th across the scales tested, from raw population to log.
+- **Reach scale:** the cube root is a judgment call. The Vice President ranked from 4th to 65th across the scales tested, from raw population to log.
 - **Spending controlled:** should the method use the budget each position controls? It may suit the mayor and governor comparison better than a flat scope multiplier: New York City's budget is far larger than Wyoming's or Vermont's. State GDP was tested and is nearly identical to population (correlation 0.99). Land area was tested and is unrelated to population (0.2), but it doesn't clearly measure power.
 - **Weights:** should all five factors count equally? Are the scope multipliers right?
 - **Comparing levels:** can one index fairly compare a federal position to a city position? A mayor may control their city more fully than a Senator controls anything, but over far fewer people and with narrower authority.
