@@ -2,6 +2,8 @@
 
 A Streamlit app that ranks US political positions by how much power they hold. It has a searchable ranking, charts, side-by-side comparison, and a full explanation of the method.
 
+> **Note:** This was quickly vibe-coded and is not a serious project. The rankings rest on rough judgment calls, so don't treat them as research.
+
 ## Goal
 
 Most people would guess that the President is the most powerful single position in the US. Few could say where other positions rank. Where do the Vice President, a US Senator, the governor of a large or small state, or the mayor of New York City or Los Angeles fall?
