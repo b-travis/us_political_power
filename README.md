@@ -2,6 +2,8 @@
 
 A Streamlit app that ranks US political positions by how much power they hold. It has a searchable ranking, charts, side-by-side comparison, and a full explanation of the method.
 
+**Live app:** https://uspoliticalpower-t9hp6zs4wpberntfvunzac.streamlit.app/
+
 > **Note:** This was quickly vibe-coded and is not a serious project. The rankings rest on rough judgment calls, so don't treat them as research.
 
 ## Goal
